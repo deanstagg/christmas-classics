@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Christmas Classics Calendar</title>
+<style>
+  /* ===== THEME — swap these for brand colours/fonts ===== */
+  :root {
+    --bg: #070a09;
+    --bg-2: #0f1713;
+    --door: #141d19;
+    --door-2: #18241f;
+    --accent: #22e07a;
+    --wrong: #ff5a5f;
+    --text: #ffffff;
+    --muted: #8fa89a;
+    --panel: #111915;
+    --radius: 14px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: var(--font); color: var(--text); background: linear-gradient(160deg, var(--bg), var(--bg-2)); padding: clamp(16px, 4vw, 40px); }
+
+  header { text-align: center; margin-bottom: clamp(16px, 3vw, 24px); }
+  h1 { margin: 0 0 6px; font-size: clamp(1.6rem, 4vw, 2.4rem); letter-spacing: -0.01em; color: #fff; }
+  .sub { margin: 0; color: rgba(255,255,255,.75); font-size: clamp(.9rem, 2vw, 1rem); }
+  .scorebar { display: inline-flex; gap: 18px; margin-top: 14px; padding: 8px 18px; border-radius: 999px;
+              background: rgba(34,224,122,.08); border: 1px solid rgba(34,224,122,.35); font-size: .95rem; }
+  .scorebar b { color: var(--accent); }
+  .banner { display: none; margin: 12px auto 0; max-width: 520px; padding: 8px 12px; border-radius: 8px; background: rgba(255,200,0,.15); color: #ffd866; font-size: .85rem; }
+  .banner.show { display: block; }
+
+  /* ===== Door grid ===== */
+  .grid { display: grid; gap: clamp(8px, 1.5vw, 14px); grid-template-columns: repeat(6, minmax(0, 1fr)); max-width: 960px; margin: 0 auto; }
+  @media (max-width: 760px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 440px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+  .cell { perspective: 900px; aspect-ratio: 1 / 1; }
+  .door { position: relative; width: 100%; height: 100%; border: 0; padding: 0; cursor: pointer; background: transparent; font: inherit; color: inherit; border-radius: var(--radius); }
+  .door:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .inside, .front { position: absolute; inset: 0; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+  .inside { background: rgba(34,224,122,.06); border: 2px dashed rgba(34,224,122,.35); font-size: .8rem; color: var(--muted); gap: 4px; padding: 6px; }
+  .inside .res { font-size: 1.4rem; }
+  .inside .res.ok { color: var(--accent); } .inside .res.no { color: var(--wrong); }
+  .front { background: var(--door); box-shadow: inset 0 0 0 2px rgba(255,255,255,.08), 0 6px 16px rgba(0,0,0,.25);
+           transform-origin: left center; transition: transform .55s cubic-bezier(.2,.8,.2,1), box-shadow .2s; backface-visibility: hidden; }
+  .cell:nth-child(3n) .front { background: var(--door-2); }
+  .num { font-size: clamp(1.4rem, 4vw, 2.2rem); font-weight: 800; line-height: 1; }
+  .mon { margin-bottom: 4px; font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+  .cell.special .mon { color: #eafff3; }
+  .tag { margin-top: 6px; font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .door:hover .front { box-shadow: inset 0 0 0 2px rgba(255,255,255,.25), 0 8px 20px rgba(0,0,0,.45); }
+  .cell.cell.special .front { background: linear-gradient(145deg, #22e07a, #0b6b3a); }
+  .cell.special .tag { color: #eafff3; }
+  .cell.cell.today .front { background: #0f2a1c; box-shadow: inset 0 0 0 3px var(--accent), 0 0 28px rgba(34,224,122,.55); }
+  .cell.locked .inside { visibility: hidden; }
+  .cell.locked .front { opacity: .45; }
+  .cell.locked .door { cursor: not-allowed; }
+  .cell.opened .front { transform: rotateY(-105deg); }
+  .cell.shake .front { animation: shake .4s; }
+  @keyframes shake { 20%,60% { transform: translateX(-4px); } 40%,80% { transform: translateX(4px); } }
+
+  /* ===== Headshot with Santa hat (guessed doors + result) ===== */
+  .hs { position: absolute; inset: 0; border-radius: var(--radius); overflow: hidden; background: radial-gradient(circle at 50% 35%, #1d4d33, #0b1a12); }
+  .hs img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .hs .hat { position: absolute; left: var(--hx, 20%); top: var(--hy, 10%); width: var(--hw, 62%); transform: rotate(var(--hr, -8deg)); transform-origin: 50% 90%; filter: drop-shadow(0 3px 4px rgba(0,0,0,.4)); }
+  .hs .noimg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 2.2rem; }
+  .pill { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); white-space: nowrap; padding: 3px 9px; border-radius: 999px; font-size: clamp(.6rem, 1.6vw, .75rem); font-weight: 800; letter-spacing: .04em; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+  .pill.ok { background: var(--accent); color: #04140b; } .pill.no { background: var(--wrong); color: #fff; }
+  .cnr { position: absolute; top: 6%; left: 8%; font-size: clamp(.6rem, 1.6vw, .72rem); font-weight: 700; color: #fff; text-shadow: 0 1px 3px #000; }
+  .cell.guessed.ok .inside { border: 2px solid var(--accent); } .cell.guessed.no .inside { border: 2px solid var(--wrong); }
+  .cell.guessed .inside { padding: 0; }
+  .result .who { display: flex; gap: 14px; align-items: center; }
+  .result .mini { position: relative; flex: 0 0 84px; height: 84px; }
+  .result .mini .hs { border-radius: 12px; }
+
+  /* ===== Door dialog: portrait video + guess panel ===== */
+  dialog { border: 1px solid rgba(34,224,122,.4); padding: 0; border-radius: 18px; width: min(900px, 94vw); max-height: 94vh;
+           background: var(--panel); color: #fff; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: auto; }
+  .x { position: absolute; top: 10px; right: 10px; z-index: 5; width: 38px; height: 38px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 22px; cursor: pointer; line-height: 1; }
+  dialog::backdrop { background: rgba(0,0,0,.8); animation: fadeIn .35s ease; }
+  @keyframes fadeIn { from { opacity: 0; } }
+  dialog.closing::backdrop { opacity: 0; transition: opacity .3s; }
+  .dlg { display: grid; grid-template-columns: auto 1fr; }
+  .vid { background: #000; height: min(78vh, 600px); aspect-ratio: var(--vid-aspect, 4 / 5); position: relative; }
+  .vid video, .vid iframe { width: 100%; height: 100%; object-fit: contain; border: 0; display: block; }
+  .vid .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); padding: 20px; font-size: .9rem; }
+  .vid .label { position: absolute; top: 12px; left: 12px; padding: 4px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .unmute { position: absolute; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 3; border: 0; border-radius: 999px; padding: 9px 16px; font: inherit; font-weight: 700; background: rgba(0,0,0,.75); color: #fff; cursor: pointer; }
+  .count { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
+           background: radial-gradient(circle at 50% 45%, rgba(200,32,42,.92), rgba(70,6,10,.96)); transition: opacity .3s; }
+  .count.out { opacity: 0; }
+  .cd-title { font-size: clamp(1.4rem, 3.2vw, 2rem); font-weight: 800; letter-spacing: .02em; }
+  .cd-num { font-size: clamp(5rem, 14vw, 8rem); font-weight: 900; line-height: 1.1; color: #fff; text-shadow: 0 6px 30px rgba(0,0,0,.4); }
+  .cd-num.pop { animation: pop .9s ease-out; }
+  @keyframes pop { 0% { transform: scale(1.6); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 85% { opacity: 1; } 100% { opacity: .2; transform: scale(.9); } }
+  .cd-skip { margin-top: 10px; font-size: .8rem; color: rgba(255,255,255,.75); }
+  @media (prefers-reduced-motion: reduce) { .cd-num.pop { animation: none; } }
+  .toggle { position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; padding: 3px; border-radius: 999px; background: rgba(0,0,0,.7); box-shadow: 0 2px 10px rgba(0,0,0,.4); }
+  .toggle button { border: 0; border-radius: 999px; padding: 6px 13px; font: inherit; font-size: .8rem; font-weight: 700; background: transparent; color: #cfe0d6; cursor: pointer; }
+  .toggle button.on[data-m="santa"] { background: #c8202a; color: #fff; }
+  .toggle button.on[data-m="reveal"] { background: var(--accent); color: #04140b; }
+  .vid .label.santa { background: #c8202a; } .vid .label.reveal { background: var(--accent); color: #04140b; }
+  .panel { padding: 22px 22px 20px; display: flex; flex-direction: column; min-width: 0; }
+  .day { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
+  .panel h2 { margin: 4px 0 6px; font-size: 1.45rem; }
+  .q { margin: 0 0 14px; color: #cfe0d6; }
+  .opts { display: grid; gap: 10px; }
+  .opt { text-align: left; font: inherit; font-weight: 600; padding: 13px 16px; border-radius: 12px; cursor: pointer;
+         background: rgba(255,255,255,.05); color: #fff; border: 1px solid rgba(255,255,255,.15); transition: .15s; display: flex; justify-content: space-between; align-items: center; }
+  .opt .nm { display: flex; align-items: center; gap: 12px; }
+  .ltr { flex: 0 0 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: .85rem; font-weight: 800;
+         background: rgba(255,255,255,.12); color: #fff; }
+  .opt:hover:not(:disabled) .ltr { background: var(--accent); color: #111; }
+  .opt.correct .ltr { background: var(--ok, var(--accent)); color: #04140b; }
+  .opt.wrong .ltr { background: var(--wrong); color: #fff; }
+  .opt:hover:not(:disabled) { border-color: var(--accent); background: rgba(34,224,122,.08); }
+  .opt:disabled { cursor: default; }
+  .opt.correct { border-color: var(--accent); background: rgba(34,224,122,.18); }
+  .opt.wrong { border-color: var(--wrong); background: rgba(255,90,95,.15); }
+  .opt.dim { opacity: .45; }
+  .result { display: none; margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.05); }
+  .result.show { display: block; }
+  .result .verdict { font-weight: 800; font-size: 1.15rem; margin-bottom: 4px; }
+  .result .verdict.ok { color: var(--accent); } .result .verdict.no { color: var(--wrong); }
+  .result p { margin: 0; color: #cfe0d6; line-height: 1.45; }
+  .actions { margin-top: auto; padding-top: 16px; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+  .btn { border: 0; border-radius: 999px; padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--accent); color: #04140b; }
+  .btn.ghost { background: rgba(255,255,255,.08); color: #fff; border: 1px solid rgba(255,255,255,.15); }
+
+  @media (max-width: 640px) {
+    dialog { width: 100vw; max-width: 100vw; max-height: 100vh; height: 100vh; border-radius: 0; border: 0; }
+    .dlg { grid-template-columns: 1fr; }
+    .vid { height: 50vh; width: auto; margin: 0 auto; }
+    .panel { padding: 16px; }
+  }
+
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px); background: #000c; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: .9rem; opacity: 0; transition: .25s; pointer-events: none; z-index: 10; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce) { .front { transition: none; } .cell.shake .front { animation: none; } }
+  /* ===== Festive theme: red, gold and mounded snow ===== */
+  :root { --bg: #7d0d15; --bg-2: #4a060b; --door: #9e1420; --door-2: #8a101b; --accent: #ffd76a; --ok: #36d07a; --wrong: #ff6b6b; --muted: #f3d9a4; --panel: #2b0a0e; }
+  html { background: #4a060b; }
+  body { background: radial-gradient(ellipse at 50% 0%, #b3141f 0%, #7d0d15 45%, #4a060b 100%); position: relative; min-height: 100vh; padding-bottom: 150px; }
+  body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 130px; pointer-events: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 130' preserveAspectRatio='none'%3E%3Cpath d='M0 45 Q120 5 260 38 T520 30 T780 22 T1020 40 T1200 18 V130 H0Z' fill='%23e8eef5'/%3E%3Cpath d='M0 70 Q140 30 300 62 T600 58 T900 50 T1200 55 V130 H0Z' fill='%23ffffff'/%3E%3C/svg%3E") bottom / 100% 100% no-repeat; }
+  h1 { color: #fff; }
+  .sub { color: #ffe9b0; }
+  .scorebar { background: rgba(0,0,0,.25); border-color: rgba(255,215,106,.6); }
+  .scorebar b { color: var(--accent); }
+  .grid { position: relative; z-index: 1; }
+
+  .front { box-shadow: inset 0 0 0 2px rgba(255,215,106,.35), 0 8px 18px rgba(0,0,0,.35); }
+  .front::before { content: ""; position: absolute; left: -5px; right: -5px; top: -11px; height: 28px; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25));
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 28' preserveAspectRatio='none'%3E%3Cpath d='M0 17 Q3 5 13 7 Q20 0 31 5 Q41 0 50 6 Q60 0 70 5 Q80 1 88 6 Q98 4 100 16 L100 19 Q96 23 90 20 Q85 28 77 21 Q70 25 62 21 Q55 27 46 21 Q38 25 30 21 Q22 27 14 21 Q6 24 0 19 Z' fill='%23ffffff'/%3E%3C/svg%3E") top / 100% 100% no-repeat; }
+  .mon { color: var(--accent); }
+  .tag { color: #ffe9b0; }
+  .door:hover .front { box-shadow: inset 0 0 0 2px var(--accent), 0 10px 24px rgba(0,0,0,.45); }
+  .cell.cell.today .front { background: #b8182a; box-shadow: inset 0 0 0 3px var(--accent), 0 0 26px rgba(255,215,106,.55); }
+  .cell.cell.special .front { background: linear-gradient(145deg, #2a8a4a, #14532d); }
+  .cell.special .mon { color: var(--accent); }
+  .cell.locked .front { opacity: 1; background: #6e0b13; }
+  .cell.cell.special.locked .front { background: linear-gradient(145deg, #1f6b39, #0f3f22); }
+  .cell.locked .front > span { opacity: .35; }
+  .cell.guessed .inside::before { content: ""; position: absolute; z-index: 2; left: -5px; right: -5px; top: -11px; height: 28px; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25));
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 28' preserveAspectRatio='none'%3E%3Cpath d='M0 17 Q3 5 13 7 Q20 0 31 5 Q41 0 50 6 Q60 0 70 5 Q80 1 88 6 Q98 4 100 16 L100 19 Q96 23 90 20 Q85 28 77 21 Q70 25 62 21 Q55 27 46 21 Q38 25 30 21 Q22 27 14 21 Q6 24 0 19 Z' fill='%23ffffff'/%3E%3C/svg%3E") top / 100% 100% no-repeat; }
+  .cell.guessed .cnr { top: 14%; }
+  .cell.guessed.ok .inside { border-color: var(--ok); } .cell.guessed.no .inside { border-color: var(--wrong); }
+  .pill.ok { background: var(--ok); color: #04140b; }
+
+  dialog { background: var(--panel); border-color: rgba(255,215,106,.5); }
+  .day { color: var(--accent); }
+  .q, .result p { color: #ffe9b0; }
+  .opt:hover:not(:disabled) { border-color: var(--accent); background: rgba(255,215,106,.08); }
+  .opt.correct { border-color: var(--ok); background: rgba(54,208,122,.18); }
+  .result .verdict.ok { color: var(--ok); }
+  .btn.primary { background: var(--accent); color: #4a060b; }
+  .toggle button.on[data-m="reveal"] { background: var(--accent); color: #4a060b; }
+  .count { background: radial-gradient(circle at 50% 45%, rgba(31,122,58,.94), rgba(10,50,25,.97)); }
+  /* ===== When embedded in an iframe that grows to fit the calendar ===== */
+  html.embedded body { min-height: 0; }
+  html.embedded dialog { position: absolute; margin: 0 auto; bottom: auto; max-height: none; }
+  @media (max-width: 640px) {
+    html.embedded dialog { height: auto; width: 100%; max-width: 100%; }
+    html.embedded .vid { height: auto; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Christmas Classics Calendar</h1>
+  <p class="sub" id="subtitle">Guess who is Santa delivering on the big stage.</p>
+  <div class="scorebar" aria-live="polite">
+    <span>Score <b id="score">0</b> / <span id="played">0</span></span>
+    <span>Streak <b id="streak">0</b></span>
+  </div>
+  <div class="banner" id="banner"></div>
+</header>
+
+<main class="grid" id="grid" aria-label="Advent calendar doors"></main>
+
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <button class="x" id="dlgX" type="button" aria-label="Close">&times;</button>
+  <div class="dlg">
+    <div class="vid" id="vid"></div>
+    <div class="panel">
+      <div class="day" id="dlgDay"></div>
+      <h2 id="dlgTitle"></h2>
+      <p class="q" id="dlgQ">Who's under the beard?</p>
+      <div class="opts" id="opts" role="group" aria-label="Choose the try scorer"></div>
+      <div class="result" id="result" role="status" aria-live="polite">
+        <div class="who">
+          <div class="mini" id="mini"></div>
+          <div>
+            <div class="verdict" id="verdict"></div>
+            <p id="resultText"></p>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn ghost" id="dlgClose" type="button">Close</button>
+        <button class="btn primary" id="replay" type="button" hidden>Watch again</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =====================================================================
+   SETTINGS + CONTENT — the only part editors need to touch.
+   For each door:
+     title        – shown above the question
+     santaVideo   – the try with the scorer disguised as Santa (portrait, see videoAspect)
+     revealVideo  – the original try, played after the guess (same shape)
+     options      – 3 or 4 player names to choose from
+     answer       – position of the correct name in options (0 = first)
+     reveal       – one line shown after the guess (e.g. match and minute)
+     headshot     – the scorer's headshot (square, transparent or plain background,
+                    head in the middle with space above for the hat)
+     hat          – optional nudge for the Santa hat if a photo is framed differently,
+                    e.g. { x: "20%", y: "10%", w: "62%", r: "-8deg" }
+   Videos can be a direct .mp4 link, or a YouTube/other player embed link.
+   ===================================================================== */
+const CONFIG = {
+  year: 2026,
+  month: 12,
+  timeZone: "Australia/Sydney",
+  specialDoors: [24],
+  videoAspect: "4 / 5",          // shape of every clip (width / height); the video box is locked to this
+  doors: {}
+};
+// Placeholder content for all 24 doors — replace with the real tries.
+for (let n = 1; n <= 24; n++) {
+  CONFIG.doors[n] = {
+    title: `Christmas Classics #${25 - n}`,
+    santaVideo: "",
+    revealVideo: "",
+    options: ["Player A", "Player B", "Player C", "Player D"],
+    answer: (n * 7) % 4,
+    reveal: "Placeholder: match, round and minute of the try.",
+    headshot: ""
+  };
+}
+// Day 1 — real content
+CONFIG.doors[1] = Object.assign(CONFIG.doors[1], {
+  title: "Christmas Classics #24",
+  santaVideo: "videos/day01-santa.mp4",
+  revealVideo: "videos/day01-reveal.mp4",
+  options: ["James Tedesco", "Reece Walsh", "Elf McSnowflake", "Kalyn Ponga"],
+  answer: 1,
+  headshot: "images/day01-headshot.png"
+});
+CONFIG.order = [7, 15, 2, 21, 11, 4, 18, 9, 24, 13, 1, 22, 6, 16, 10, 3, 19, 12, 8, 20, 14, 5, 23, 17];
+/* ===================================================================== */
+
+/* Preview options (add to the page URL; remove for the live embed):
+     ?preview=all       → every door unlocked
+     ?date=2026-12-10   → pretend today is 10 December */
+const params = new URLSearchParams(location.search);
+let PREVIEW_ALL = params.get("preview") === "all";
+let FAKE_DATE = params.get("date");
+
+const $ = (id) => document.getElementById(id);
+
+function todayInZone() {
+  if (FAKE_DATE && /^\d{4}-\d{2}-\d{2}$/.test(FAKE_DATE)) { const [y, m, d] = FAKE_DATE.split("-").map(Number); return { y, m, d }; }
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: CONFIG.timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const get = (t) => Number(parts.find(p => p.type === t).value);
+  return { y: get("year"), m: get("month"), d: get("day") };
+}
+function unlockedUpTo() {
+  if (PREVIEW_ALL) return 24;
+  const t = todayInZone(), cur = t.y * 100 + t.m, start = CONFIG.year * 100 + CONFIG.month;
+  if (cur < start) return 0;
+  if (cur > start) return 24;
+  return Math.min(t.d, 24);
+}
+
+/* ===== Saved progress (this browser only; fails safely) ===== */
+const STORE_KEY = "advent-guess-" + CONFIG.year;
+function load() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {} }
+let state = Object.assign({ opened: [], guesses: {} }, load());   // guesses: { door: chosenIndex }
+
+function stats() {
+  let score = 0, played = 0, streak = 0;
+  for (let n = 1; n <= 24; n++) {
+    const g = state.guesses[n];
+    if (g === undefined) continue;
+    played++;
+    if (g === CONFIG.doors[n].answer) score++;
+  }
+  // current streak: consecutive correct guesses counting back from the latest guessed door
+  for (let n = 24; n >= 1; n--) {
+    const g = state.guesses[n];
+    if (g === undefined) { if (streak) break; else continue; }
+    if (g === CONFIG.doors[n].answer) streak++; else break;
+  }
+  return { score, played, streak };
+}
+function renderScore() {
+  const s = stats();
+  $("score").textContent = s.score; $("played").textContent = s.played; $("streak").textContent = s.streak;
+}
+
+/* ===== Headshot with Santa hat ===== */
+const HAT_SVG = `<svg class="hat" viewBox="0 0 240 150" aria-hidden="true"><path d="M22 118 Q60 18 160 14 Q212 14 228 66 Q204 50 184 58 Q206 88 220 118 Z" fill="#d61f29"/><path d="M120 118 Q150 40 160 14 Q212 14 228 66 Q204 50 184 58 Q206 88 220 118 Z" fill="#a50f17" opacity=".55"/><circle cx="228" cy="72" r="15" fill="#fff"/><rect x="6" y="102" width="228" height="38" rx="19" fill="#fff"/><rect x="6" y="124" width="228" height="16" rx="8" fill="#e6e6e6"/></svg>`;
+function headshotHTML(c) {
+  const h = c.hat || {};
+  const vars = [["--hx", h.x], ["--hy", h.y], ["--hw", h.w], ["--hr", h.r]].filter(v => v[1]).map(v => `${v[0]}:${v[1]}`).join(";");
+  const img = c.headshot ? `<img src="${c.headshot}" alt="">` : `<span class="noimg">🎅</span>`;
+  return `<span class="hs" style="${vars}">${img}${c.headshot ? HAT_SVG : ""}</span>`;
+}
+
+document.documentElement.style.setProperty("--vid-aspect", CONFIG.videoAspect);
+
+/* ===== Grid ===== */
+let limit = 0, todayNum = null;
+function render() {
+  limit = unlockedUpTo();
+  const t = todayInZone();
+  todayNum = (!PREVIEW_ALL && t.y === CONFIG.year && t.m === CONFIG.month && t.d <= 24) ? t.d : null;
+  const b = $("banner");
+  if (PREVIEW_ALL || FAKE_DATE) { b.textContent = PREVIEW_ALL ? "Preview mode: all doors unlocked" : "Preview mode: simulating " + FAKE_DATE; b.classList.add("show"); }
+  else b.classList.remove("show");
+
+  const grid = $("grid"); grid.innerHTML = "";
+  CONFIG.order.forEach((n) => {
+    const locked = n > limit, opened = state.guesses[n] !== undefined && !locked;   // doors stay open only once guessed
+    const g = state.guesses[n], guessed = g !== undefined;
+    const cell = document.createElement("div");
+    const ok = guessed && g === CONFIG.doors[n].answer;
+    cell.className = "cell" + (CONFIG.specialDoors.includes(n) ? " special" : "") + (locked ? " locked" : "") + (opened ? " opened" : "") + (n === todayNum ? " today" : "") + (guessed && opened ? " guessed " + (ok ? "ok" : "no") : "");
+    const inside = (guessed && opened)
+      ? headshotHTML(CONFIG.doors[n]) + `<span class="cnr">${n} Dec</span><span class="pill ${ok ? "ok" : "no"}">${ok ? "✓ Got it" : "✗ Missed"}</span>`
+      : (opened ? "<span>Guess Santa</span>" : "");
+    const label = locked ? `Door ${n}, opens ${n} December` : `Door ${n}${guessed ? (g === CONFIG.doors[n].answer ? ", guessed correctly" : ", guessed wrong") : ""}`;
+    cell.innerHTML = `<button class="door" type="button" aria-label="${label}">
+        <span class="inside">${inside}</span>
+        <span class="front"><span class="mon">Dec</span><span class="num">${n}</span><span class="tag">${locked ? "🔒 Locked" : "Guess Santa"}</span></span>
+      </button>`;
+    cell.querySelector("button").addEventListener("click", () => openDoor(n, cell));
+    grid.appendChild(cell);
+  });
+  renderScore();
+  postHeight();
+}
+
+function openDoor(n, cell) {
+  if (n > limit) {
+    cell.classList.remove("shake"); void cell.offsetWidth; cell.classList.add("shake");
+    toast(`Door ${n} opens on ${n} December`); return;
+  }
+  const first = !state.opened.includes(n);
+  if (first) { state.opened.push(n); save(); }
+  cell.classList.add("opened");
+  track("advent:door_open", { door: n, firstOpen: first });
+  setTimeout(() => showDoor(n, cell), first ? 220 : 0);
+}
+
+/* ===== Playback ===== */
+// Try with sound first (opening the door counts as a tap). If the browser blocks sound,
+// play muted with a "Tap for sound" button.
+function playWithSound(el, v) {
+  el.muted = false;
+  el.play().catch(() => {
+    el.muted = true;
+    el.play().catch(() => {});
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "unmute"; b.textContent = "🔊 Tap for sound";
+    b.addEventListener("click", () => { el.muted = false; el.play(); b.remove(); });
+    el.addEventListener("volumechange", () => { if (!el.muted) b.remove(); });
+    v.appendChild(b);
+  });
+}
+
+// "Guess Santa" 3-2-1 countdown over the video, then play. Tap to skip.
+const COUNTDOWN_FROM = 3;
+function countdownThenPlay(el, v) {
+  // Start and immediately pause inside the door click, so the browser still allows sound after the countdown
+  let started = false;
+  el.muted = false;
+  const prime = el.play();
+  if (prime) prime.then(() => { if (!started) { el.pause(); el.currentTime = 0; } }).catch(() => {});
+
+  const o = document.createElement("div");
+  o.className = "count";
+  o.innerHTML = `<div class="cd-title">Guess Santa</div><div class="cd-num" aria-live="polite"></div><div class="cd-skip">Tap to start now</div>`;
+  v.appendChild(o);
+  const num = o.querySelector(".cd-num");
+  let n = COUNTDOWN_FROM, timer;
+  const show = () => { num.textContent = n; num.classList.remove("pop"); void num.offsetWidth; num.classList.add("pop"); };
+  const go = () => {
+    if (started) return;
+    started = true; clearInterval(timer);
+    o.classList.add("out"); setTimeout(() => o.remove(), 300);
+    if (!el.isConnected) return;
+    el.currentTime = 0; playWithSound(el, v);
+  };
+  show();
+  timer = setInterval(() => { if (!el.isConnected) return clearInterval(timer); n--; if (n <= 0) go(); else show(); }, 1000);
+  o.addEventListener("click", go);
+}
+
+/* ===== Dialog ===== */
+let current = null;
+function setVideo(src, kind, autoplay, answered) {
+  const v = $("vid");
+  // Before the guess: a "Who's Santa?" label. After the guess: a Santa / player toggle.
+  const label = answered ? toggleHTML(kind) : `<span class="label ${kind}">${kind === "santa" ? "Who's Santa?" : "The reveal"}</span>`;
+  if (!src) { v.innerHTML = `<div class="ph">${kind === "santa" ? "Santa clip" : "Reveal clip"} goes here</div>` + label; return; }
+  if (/\.(mp4|webm|mov)(\?|$)|^(data:video|blob:)/i.test(src)) {
+    v.innerHTML = `<video src="${src}" controls playsinline preload="auto"></video>` + label;
+    const el = v.querySelector("video");
+    el.addEventListener("error", () => { v.insertAdjacentHTML("beforeend", `<div class="ph" style="background:#000">Video couldn't load. Check the file link for this door.</div>`); });
+    if (autoplay && kind === "santa" && !answered) countdownThenPlay(el, v);
+    else if (autoplay) playWithSound(el, v);
+  } else {
+    v.innerHTML = `<iframe src="${src}" title="${kind} video" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>` + label;
+  }
+  v.querySelectorAll(".toggle button").forEach(b => b.addEventListener("click", () => {
+    if (b.classList.contains("on")) return;
+    track("advent:toggle", { door: current, view: b.dataset.m });
+    showClip(b.dataset.m, true);
+  }));
+}
+
+/* Santa / player toggle shown after the guess */
+function firstName(c) { return c.firstName || (c.options[c.answer] || "Player").split(" ")[0]; }
+function toggleHTML(kind) {
+  const c = CONFIG.doors[current];
+  return `<div class="toggle" role="group" aria-label="Choose which clip to watch">
+    <button type="button" data-m="santa" class="${kind === "santa" ? "on" : ""}" aria-pressed="${kind === "santa"}">🎅 Santa</button>
+    <button type="button" data-m="reveal" class="${kind === "reveal" ? "on" : ""}" aria-pressed="${kind === "reveal"}">${escapeHtml(firstName(c))}</button>
+  </div>`;
+}
+let clipMode = "reveal";
+function showClip(mode, autoplay) {
+  const c = CONFIG.doors[current];
+  clipMode = mode;
+  setVideo(mode === "santa" ? c.santaVideo : c.revealVideo, mode, autoplay, true);
+}
+
+let currentCell = null;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* Zoom the dialog out of (or back into) the door it belongs to */
+function zoom(cell, reverse) {
+  const d = $("dlg");
+  if (!cell || reduceMotion || !d.animate) return null;
+  const c = cell.getBoundingClientRect(), r = d.getBoundingClientRect();
+  const dx = (c.left + c.width / 2) - (r.left + r.width / 2), dy = (c.top + c.height / 2) - (r.top + r.height / 2);
+  const from = { transform: `translate(${dx}px, ${dy}px) scale(${c.width / r.width}, ${c.height / r.height})`, opacity: 0.4, borderRadius: "40px" };
+  const to = { transform: "none", opacity: 1, borderRadius: "18px" };
+  const inner = d.querySelector(".dlg");
+  if (reverse) {
+    inner.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "forwards" });
+    return d.animate([to, from], { duration: 320, easing: "cubic-bezier(.5,0,.75,0)", fill: "forwards" });
+  }
+  inner.animate([{ opacity: 0 }, { opacity: 0 }, { opacity: 1 }], { duration: 560, easing: "ease-out" });
+  return d.animate([from, to], { duration: 480, easing: "cubic-bezier(.2,.8,.2,1)" });
+}
+
+function closeDoor() {
+  const d = $("dlg");
+  if (!d.open || d.classList.contains("closing")) return;
+  d.classList.add("closing");
+  const a = zoom(currentCell, true);
+  const done = () => { d.close(); d.classList.remove("closing"); d.getAnimations({ subtree: true }).forEach(x => x.cancel()); };
+  if (a) a.onfinish = done; else done();
+}
+
+function showDoor(n, cell) {
+  current = n; currentCell = cell || null;
+  const c = CONFIG.doors[n];
+  $("dlgDay").textContent = `${n} December`;
+  $("dlgTitle").textContent = c.title;
+  const opts = $("opts"); opts.innerHTML = "";
+  c.options.forEach((name, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "opt"; b.innerHTML = `<span class="nm"><span class="ltr">${"ABCDEF"[i]}</span>${escapeHtml(name)}</span><span class="mark"></span>`;
+    b.addEventListener("click", () => guess(n, i));
+    opts.appendChild(b);
+  });
+  const g = state.guesses[n];
+  if (g === undefined) {
+    $("dlgQ").textContent = "Who's under the beard?";
+    $("result").classList.remove("show"); $("replay").hidden = true;
+    setVideo(c.santaVideo, "santa", true);
+  } else {
+    showResult(n, g, false);
+  }
+  $("dlg").showModal();
+  placeDialog(currentCell);
+  zoom(currentCell, false);
+  postHeight();
+}
+
+function guess(n, i) {
+  if (state.guesses[n] !== undefined) return;
+  state.guesses[n] = i; save();
+  track("advent:guess", { door: n, correct: i === CONFIG.doors[n].answer });
+  showResult(n, i, true);
+  render();
+}
+
+function showResult(n, g, fresh) {
+  const c = CONFIG.doors[n], ok = g === c.answer;
+  $("dlgQ").textContent = ok ? "You picked it!" : "Not this time.";
+  [...$("opts").children].forEach((b, i) => {
+    b.disabled = true;
+    if (i === c.answer) { b.classList.add("correct"); b.querySelector(".mark").textContent = "✓"; }
+    else if (i === g) { b.classList.add("wrong"); b.querySelector(".mark").textContent = "✗"; }
+    else b.classList.add("dim");
+  });
+  const v = $("verdict");
+  v.className = "verdict " + (ok ? "ok" : "no");
+  v.textContent = ok ? `Correct — it was ${c.options[c.answer]}!` : `It was ${c.options[c.answer]}.`;
+  const s = stats();
+  $("resultText").textContent = `${c.reveal} Your score: ${s.score} / ${s.played}.`;
+  $("mini").innerHTML = headshotHTML(c);
+  $("result").classList.add("show");
+  $("replay").hidden = false;
+  showClip("reveal", fresh);
+}
+
+$("replay").addEventListener("click", () => { if (current) showClip(clipMode, true); });
+$("dlgClose").addEventListener("click", closeDoor);
+$("dlgX").addEventListener("click", closeDoor);
+$("dlg").addEventListener("cancel", (e) => { e.preventDefault(); closeDoor(); });
+$("dlg").addEventListener("click", (e) => { if (e.target === $("dlg")) closeDoor(); });
+$("dlg").addEventListener("close", () => { $("vid").innerHTML = ""; current = null; currentCell = null; render(); });  // shuts doors closed without a guess
+
+let toastTimer;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2200); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[ch])); }
+
+/* Analytics: events go to the parent page (and GTM if loaded inside the iframe) */
+function track(type, data) {
+  try { parent.postMessage(Object.assign({ type }, data), "*"); } catch {}
+  try { window.dataLayer && window.dataLayer.push(Object.assign({ event: type.replace(":", "_") }, data)); } catch {}
+}
+/* Tell the parent page the calendar's height so the iframe fits without a scrollbar */
+/* ===== Embedding: the iframe grows to fit, and the video window opens beside the door you clicked ===== */
+const EMBEDDED = window.self !== window.top;
+if (EMBEDDED) document.documentElement.classList.add("embedded");
+let lastH = 0;
+function postHeight() {
+  const h = Math.ceil(document.body.getBoundingClientRect().height);   // measure the content itself, so the frame can shrink as well as grow
+  if (Math.abs(h - lastH) < 2) return;
+  lastH = h;
+  try { parent.postMessage({ type: "advent:height", height: h }, "*"); } catch {}
+}
+window.addEventListener("resize", postHeight);
+window.addEventListener("load", postHeight);
+if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+
+// Inside a tall iframe the "middle of the screen" can be off-screen, so place the window
+// level with the door that was clicked, and ask the page to scroll it into view.
+function placeDialog(cell) {
+  if (!EMBEDDED) return;
+  const d = $("dlg"), h = d.offsetHeight, docH = document.documentElement.scrollHeight;
+  let top = 12;
+  if (cell) { const r = cell.getBoundingClientRect(); top = window.scrollY + r.top + r.height / 2 - h / 2; }
+  // keep it on screen if the frame scrolls itself, and inside the page if it doesn't
+  top = Math.max(window.scrollY + 12, Math.min(top, window.scrollY + window.innerHeight - h - 12, docH - h - 12));
+  top = Math.max(12, top);
+  d.style.top = top + "px";
+  try { parent.postMessage({ type: "advent:dialog", top, height: h }, "*"); } catch {}
+}
+
+/* Hooks for preview tools */
+window.advent = {
+  setDate(d) { FAKE_DATE = d; PREVIEW_ALL = false; render(); },
+  unlockAll() { PREVIEW_ALL = true; render(); },
+  reset() { state = { opened: [], guesses: {} }; save(); render(); }
+};
+
+render();
+</script>
+</body>
+</html>
